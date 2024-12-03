@@ -30,6 +30,8 @@ A stored procedure is a set of SQL queries that are stored in a database and can
 * Use Direct SQL for simple, dynamic queries where flexibility is key.
 * Use Stored Procedures for reusable, secure, and performance-critical operations that need to ensure data integrity and consistency.
 
+![Pagination Example](https://github.com/AlienWashim/CRUD-Operations-with-Stored-Procedures-in-ASP.NET-CoreAPI/blob/04d15e5851ee8d267713c782de510d647a22b3de/StoredProcedure.png)
+
 ## Stored Procedure Code Example (SQL)
 ```sql
 -- Stored Procedure for GetAllPersons
