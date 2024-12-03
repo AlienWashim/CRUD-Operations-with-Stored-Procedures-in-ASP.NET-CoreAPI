@@ -32,65 +32,264 @@ A stored procedure is a set of SQL queries that are stored in a database and can
 
 ## Stored Procedure Code Example (SQL)
 ```sql
--- Stored Procedure to Get Paginated Persons
-CREATE PROCEDURE GetPaginatedPersons
-    @PageNumber INT,
-    @PageSize INT
+-- Stored Procedure for GetAllPersons
+CREATE PROCEDURE GetAllPersons
 AS
 BEGIN
-    SELECT * FROM Persons
-    ORDER BY Id
-    OFFSET (@PageNumber - 1) * @PageSize ROWS
-    FETCH NEXT @PageSize ROWS ONLY;
-END;
+    SELECT Id, Name, Salary FROM Persons
+END
+
+-- Stored Procedure for GetPersonById
+CREATE PROCEDURE GetPersonById
+    @Id INT
+AS
+BEGIN
+    SELECT Id, Name, Salary FROM Persons WHERE Id = @Id
+END
+
+-- Stored Procedure for AddPerson
+CREATE PROCEDURE AddPerson
+    @Name NVARCHAR(100),
+    @Salary DECIMAL
+AS
+BEGIN
+    INSERT INTO Persons (Name, Salary)
+    VALUES (@Name, @Salary)
+END
+
+-- Stored Procedure for UpdatePerson
+CREATE PROCEDURE UpdatePerson
+    @Id INT,
+    @Name NVARCHAR(100),
+    @Salary DECIMAL
+AS
+BEGIN
+    UPDATE Persons
+    SET Name = @Name, Salary = @Salary
+    WHERE Id = @Id
+END
+
+-- Stored Procedure for DeletePerson
+CREATE PROCEDURE DeletePerson
+    @Id INT
+AS
+BEGIN
+    DELETE FROM Persons WHERE Id = @Id
+END
 ```
 
 ## Example in C# Controller
 
 ```csharp
-// Controller method to fetch paginated persons
-[HttpGet]
-public ActionResult<IEnumerable<Person>> GetPaginatedPersons(int pageNumber = 1, int pageSize = 10)
+using Microsoft.AspNetCore.Mvc;
+using WebAPI.Models;
+using WebAPI.Services;
+
+namespace WebAPI.Controllers
 {
-    var persons = _databaseServices.GetPaginatedPersons(pageNumber, pageSize);
-    return Ok(persons);
+    [Route("api/[controller]")]
+    [ApiController]
+    public class PersonController : ControllerBase
+    {
+        private readonly DatabaseServices _databaseServices;
+
+        public PersonController(DatabaseServices databaseServices)
+        {
+            _databaseServices = databaseServices;
+        }
+
+
+        [HttpGet]
+        public ActionResult<IEnumerable<Person>> GetPersons()
+        {
+            var persons = _databaseServices.GetPersons();
+            return persons;
+        }
+
+        [HttpGet("{id}")]
+        public ActionResult<Person> GetPersonById(int id)
+        {
+            var person = _databaseServices.GetPersonById(id);
+            if (person == null)
+            {
+                return NotFound();
+            }
+            return Ok(person);
+        }
+
+        [HttpPost]
+        public ActionResult PostPerson([FromBody] Person person)
+        {
+            _databaseServices.AddPerson(person);
+
+            return CreatedAtAction(nameof(GetPersons), new { Id = person.Id }, person);
+        }
+
+        [HttpPut("{id}")]
+        public ActionResult PutPerson(int id, [FromBody] Person person)
+        {
+            var oldPerson = _databaseServices.GetPersonById(id);
+            if (oldPerson == null)
+            {
+                return NotFound();
+            }
+
+            person.Id = id;
+
+            _databaseServices.UpdatePerson(person);
+
+            return NoContent();
+        }
+
+        [HttpDelete("{id}")]
+        public ActionResult DeletePerson(int id)
+        {
+            Person oldPerson = _databaseServices.GetPersonById(id);
+            if(oldPerson == null)
+            {
+                return NotFound();
+            }
+
+            _databaseServices.DeletePerson(id);
+            return NoContent();
+        }
+    }
 }
 ```
 
 ## Example in C# DatabaseServices
 ```csharp
-// Database service method to call the stored procedure and get paginated persons
-public List<Person> GetPaginatedPersons(int pageNumber, int pageSize)
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
+using WebAPI.Models;
+
+namespace WebAPI.Services
 {
-    List<Person> persons = new List<Person>();
-
-    using (var connection = new SqlConnection(_connectionString))
+    public class DatabaseServices
     {
-        connection.Open();
-        using (var command = new SqlCommand("GetPaginatedPersons", connection))
+        private readonly string _connectionString;
+        public DatabaseServices(string connectionString)
         {
-            command.CommandType = System.Data.CommandType.StoredProcedure;
-            command.Parameters.AddWithValue("@PageNumber", pageNumber);
-            command.Parameters.AddWithValue("@PageSize", pageSize);
+            _connectionString = connectionString;
+        }
 
-            using (var reader = command.ExecuteReader())
+
+        public List<Person> GetPersons()
+        {
+            List<Person> persons = new List<Person>();
+
+            using (var connection = new SqlConnection(_connectionString))
             {
-                while (reader.Read())
+                connection.Open();
+                using (var command = new SqlCommand("GetAllPersons", connection))
                 {
-                    persons.Add(new Person
+                    using (var reader = command.ExecuteReader())
                     {
-                        Id = reader.GetInt32(0),
-                        Name = reader.GetString(1),
-                        Salary = reader.GetDecimal(2)
-                    });
+                        while (reader.Read())
+                        {
+                            persons.Add(new Person
+                                {
+                                Id = reader.GetInt32(0),
+                                Name = reader.GetString(1),
+                                Salary = reader.GetDecimal(2),
+                            });
+                        }
+                    }
+                }
+            }
+
+            return persons;
+        }
+
+        public Person GetPersonById(int id)
+        {
+            Person person = null;
+
+            using (var  sqlConnection = new SqlConnection(_connectionString))
+            {
+                sqlConnection.Open();
+                using (SqlCommand command = new SqlCommand("GetPersonById", sqlConnection))
+                {
+                    command.CommandType = System.Data.CommandType.StoredProcedure;
+                    command.Parameters.AddWithValue("@Id", id);
+                    using (var reader = command.ExecuteReader())
+                    {
+                        if (reader.Read())
+                        {
+                            person = new Person
+                            {
+                                Id = reader.GetInt32(0),
+                                Name = reader.GetString(1),
+                                Salary = reader.GetDecimal(2)
+                            };
+                        }
+                    }
+                }
+            }
+            return person;
+        }
+
+        public void AddPerson(Person person)
+        {
+            using (var connection = new SqlConnection(_connectionString))
+            {
+                connection.Open();
+                using (var command = new SqlCommand("AddPerson", connection))
+                {
+                    command.CommandType = System.Data.CommandType.StoredProcedure;
+                    command.Parameters.AddWithValue("@Id", person.Id);
+                    command.Parameters.AddWithValue("@Name", person.Name);
+                    command.Parameters.AddWithValue("@Salary", person.Salary);
+                    command.ExecuteNonQuery();
+                }
+            }
+        }
+
+        public void UpdatePerson(Person person)
+        {
+            using (var connection = new SqlConnection(_connectionString))
+            {
+                connection.Open();
+                using (var command = new SqlCommand("UpdatePerson", connection))
+                {
+                    command.CommandType = System.Data.CommandType.StoredProcedure;
+                    command.Parameters.AddWithValue("@Id", person.Id);
+                    command.Parameters.AddWithValue("@Name", person.Name);
+                    command.Parameters.AddWithValue("@Salary", person.Salary);
+                    command.ExecuteNonQuery();
+                }
+            }
+        }
+
+        public void DeletePerson(int id)
+        {
+            using (var  sqlConnection = new SqlConnection(_connectionString))
+            {
+                sqlConnection.Open();
+                using (var command = new SqlCommand("DeletePerson", sqlConnection))
+                {
+                    command.CommandType = System.Data.CommandType.StoredProcedure;
+                    command.Parameters.AddWithValue("@Id", id);
+                    command.ExecuteNonQuery();
                 }
             }
         }
     }
-
-    return persons;
 }
 ```
+## Model class
+```csharp
+namespace WebAPI.Models
+{
+    public class Person
+    {
+        public int Id { get; set; }
+        public string Name { get; set; }
+        public decimal Salary { get; set; }
+    }
+}
+```
+
 
 ## Conclusion
 This repository demonstrates the use of stored procedures in an ASP.NET Core Web API to handle CRUD operations. By using stored procedures, you can enhance performance, ensure data security, and make your application more maintainable.
