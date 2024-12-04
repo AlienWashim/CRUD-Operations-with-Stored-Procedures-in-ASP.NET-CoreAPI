@@ -1,0 +1,12 @@
+{
+  "Version": 1,
+  "Hash": "+E5WLPyCXiytiWU98k5d0lu+leKDoQmxxHILDeX66jo=",
+  "Source": "WebAPIStoredProcedure",
+  "BasePath": "_content/WebAPIStoredProcedure",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [],
+  "Assets": [],
+  "Endpoints": []
+}
